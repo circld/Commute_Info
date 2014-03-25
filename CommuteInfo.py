@@ -21,9 +21,6 @@ logging.getLogger('suds.client').setLevel(logging.DEBUG)
 logging.getLogger('suds.transport').setLevel(logging.DEBUG)
 logging.getLogger('suds.xsd.schema').setLevel(logging.DEBUG)
 
-api = Client('http://graphical.weather.gov/xml/DWMLgen/wsdl/ndfdXML.wsdl')
-
-
 # description of Weather.gov api
 #print api
 
@@ -31,7 +28,7 @@ api = Client('http://graphical.weather.gov/xml/DWMLgen/wsdl/ndfdXML.wsdl')
 #geoCoords = api.service.LatLonListZipCode('11776')
 ## parse xml
 #root = lxml.etree.fromstring(geoCoords)
-#coord = root.find('latLonList').text
+#coordStr = root.find('latLonList').text
 #coord = coordStr.split(',')
 
 # get weather data
@@ -61,6 +58,8 @@ class LocationForecast(object):
                                             longitude=self.geoLoc[1],
                                             product=self.forecast)
         self.root = lxml.etree.fromstring(self.document)
+        self.xPathDict = self.gen_xPathDict(self.root, '//layout-key')
+        self.periodDict = self.get_periods(self.xPathDict)
         
     def get_zip(self):
         return self.zip
@@ -81,10 +80,21 @@ class LocationForecast(object):
         return self.geoLoc
     
     def get_xml_data(self):
-        return self.document
+        return self.document    
     
-    def get_glance(self, coords):
-        pass
+    def gen_xPathDict(self, tree, query):
+        xmlPdNames = [i.text for i in tree.xpath(query)]
+        return {i: j for i, j in zip(['days','nights','3hr','1hr'],xmlPdNames)}
+    
+    def get_periods(self, xPathDict):
+        '''
+        builds dict of lists of periods
+        '''
+        periodDict = {}
+        for period in xPathDict.keys():
+            periodDict[period] = extractPeriods(period, self.root,
+                                                self.xPathDict)
+        return periodDict
     
     def get_daily_temps(self, weathXML):
         pass
@@ -95,3 +105,40 @@ class LocationForecast(object):
 # [i.text for i in a.xpath('//name')]
 # use xpath functionality to select relevant nodes
 # for above functions
+
+def periodQuery(period, xPathDict):
+    return ("//time-layout[layout-key = '" + xPathDict[period] +
+            "']/start-valid-time")
+
+def extractPeriods(period, tree, xPathDict, childName='start-valid-time'):
+    '''
+    inputs: time increment, xml tree, dict obj with map of period names 
+    to elements, childName for querying relevant element children
+    '''
+    periods, elmnts = [], []
+    elmnts = tree.xpath(periodQuery(period, xPathDict))
+#    periods = elmnts[0].xpath('//' + childName)
+    return [i.text for i in elmnts]
+
+if __name__ == '__main__':
+    
+    api = Client('http://graphical.weather.gov/xml/DWMLgen/wsdl/ndfdXML.wsdl')
+    zipCode = '11776'    
+    portJeff = LocationForecast(zipCode, api)
+    
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
