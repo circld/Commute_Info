@@ -5,6 +5,7 @@ Date: 140319
 Author: Paul Garaud
 '''
 
+# to do: write functions to extract data (check out time series as well)
 
 
 from suds.client import Client  # main class for interacting w/API
@@ -21,27 +22,6 @@ logging.getLogger('suds.client').setLevel(logging.DEBUG)
 logging.getLogger('suds.transport').setLevel(logging.DEBUG)
 logging.getLogger('suds.xsd.schema').setLevel(logging.DEBUG)
 
-# description of Weather.gov api
-#print api
-
-# get geo coords for a particular zip code (extends to list of zip codes)
-#geoCoords = api.service.LatLonListZipCode('11776')
-## parse xml
-#root = lxml.etree.fromstring(geoCoords)
-#coordStr = root.find('latLonList').text
-#coord = coordStr.split(',')
-
-# get weather data
-#weatherData = api.service.NDFDgen(latitude=coord[0],
-#                                 longitude=coord[1],
-#                                 product='glance')
-
-# write to file to examine in NPP
-#tmp = open('weatherData.txt', 'w')
-#tmp.write(weatherData)
-#tmp.close()
-
-# to do: write functions to extract data (check out time series as well)
 
 class LocationForecast(object):
     '''
@@ -59,7 +39,7 @@ class LocationForecast(object):
                                             product=self.forecast)
         self.root = lxml.etree.fromstring(self.document)
         self.xPathDict = self.gen_xPathDict(self.root, '//layout-key')
-        self.periodDict = self.get_periods(self.xPathDict)
+        self.periodDict = self.gen_periods(self.xPathDict)
         
     def get_zip(self):
         return self.zip
@@ -82,11 +62,14 @@ class LocationForecast(object):
     def get_xml_data(self):
         return self.document    
     
+    def get_periods(self):
+        return self.periodDict
+    
     def gen_xPathDict(self, tree, query):
         xmlPdNames = [i.text for i in tree.xpath(query)]
         return {i: j for i, j in zip(['days','nights','3hr','1hr'],xmlPdNames)}
     
-    def get_periods(self, xPathDict):
+    def gen_periods(self, xPathDict):
         '''
         builds dict of lists of periods
         '''
@@ -96,8 +79,16 @@ class LocationForecast(object):
                                                 self.xPathDict)
         return periodDict
     
+    def gen_daily_temps(self):
+        pass
+    
     def get_daily_temps(self, weathXML):
         pass
+        
+# think about how to store data (by time period), and whether and
+# how to store data historically (eg write to file from locationForecast
+# object?)
+#       weathXML.etree.xpath()
     
     def get_cloud_cover(self):
         pass
@@ -109,6 +100,27 @@ class LocationForecast(object):
 def periodQuery(period, xPathDict):
     return ("//time-layout[layout-key = '" + xPathDict[period] +
             "']/start-valid-time")
+
+def extractData(dataType, kind, tree):
+    '''
+    dataType (str): temperature, cloud-amount, weather, hazards
+    kind (str): temp -> max/min, cloud-amount -> total
+    returns: dict with key=period code, value = list of values
+    '''
+    if kind == 'min':
+        temp = 'minimum'
+    elif kind == 'max':
+        temp = 'maximum'
+    
+    period = tree.xpath("//%s[@type = '%s']/@time-layout" %
+                        (dataType, kind))
+    data = [i.text for i in tree.xpath("//%s[@type = '%s']/value" 
+                                    % (dataType, kind))]
+    return [period[0], data]
+
+# incorporate extractData into LocationForecast class
+
+# write general extractData() func for data extraction using periods
 
 def extractPeriods(period, tree, xPathDict, childName='start-valid-time'):
     '''
